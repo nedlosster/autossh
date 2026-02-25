@@ -7,9 +7,9 @@
 ```
 ┌──────────────┐          SSH tunnel          ┌──────────────┐
 │   Станция    │ ──────────────────────────▶  │    Сервер    │
-│  (нет IP)    │   -R TUNNEL_PORT:localhost:22 │  (есть IP)   │
-└──────────────┘                              └──────┬───────┘
-                                                     │
+│  (нет IP)    │  -R 127.0.0.1:PORT:          │  (есть IP)   │
+│              │     127.0.0.1:22              └──────┬───────┘
+└──────────────┘                                     │
                                               localhost:TUNNEL_PORT
                                                      │
                                               ┌──────┴───────┐
@@ -18,7 +18,7 @@
                                               └──────────────┘
 ```
 
-Станция инициирует SSH-соединение к серверу и пробрасывает свой порт 22 на `localhost:<TUNNEL_PORT>` сервера. `autossh` следит за соединением и автоматически переподключается при обрыве. Systemd обеспечивает запуск при загрузке и рестарт при падении процесса.
+Станция инициирует SSH-соединение к серверу и пробрасывает свой порт 22 на `127.0.0.1:<TUNNEL_PORT>` сервера. `autossh` следит за соединением и автоматически переподключается при обрыве. Systemd обеспечивает запуск при загрузке и рестарт при падении процесса.
 
 ## Требования
 
@@ -33,7 +33,7 @@ autossh/
 ├── README.md                      # Этот файл
 ├── setup-reverse-tunnel.sh        # Скрипт установки
 ├── reverse-tunnel.conf.example    # Пример конфигурации
-└── reverse-tunnel.service         # Systemd unit
+└── reverse-tunnel.service         # Systemd unit (шаблон)
 ```
 
 ## Установка
@@ -42,7 +42,11 @@ autossh/
 
 Любым удобным способом (USB, scp, git clone) перенесите папку `autossh/` на станцию.
 
-### 2. Запустите скрипт установки
+### 2. (Опционально) Отредактируйте шаблон конфигурации
+
+Перед установкой можно отредактировать `reverse-tunnel.conf.example` — скрипт скопирует его в `/etc/reverse-tunnel.conf`. Если конфиг уже существует, он не будет перезаписан.
+
+### 3. Запустите скрипт установки
 
 ```bash
 cd autossh/
@@ -51,22 +55,23 @@ sudo bash setup-reverse-tunnel.sh
 
 Скрипт выполнит:
 - Установку `autossh`
-- Создание системного пользователя `tunnel`
-- Генерацию SSH-ключа `/home/tunnel/.ssh/id_ed25519`
-- Копирование конфига в `/etc/reverse-tunnel.conf`
-- Установку и активацию systemd-сервиса
+- Создание системного пользователя (имя берётся из `TUNNEL_USER`, по умолчанию `tunnel-c1`)
+- Генерацию SSH-ключа `/home/<TUNNEL_USER>/.ssh/id_ed25519`
+- Копирование конфига в `/etc/reverse-tunnel.conf` (если не существует)
+- Установку systemd-сервиса с подстановкой имени пользователя
+- Активацию сервиса (`enable`), но **без запуска**
 
-### 3. Добавьте публичный ключ на сервер
+### 4. Добавьте публичный ключ на сервер
 
 Скрипт выведет публичный ключ. Добавьте его в `~/.ssh/authorized_keys` того пользователя на сервере, который указан в `SSH_CONNECT`.
 
-### 4. Отредактируйте конфигурацию
+### 5. Отредактируйте конфигурацию
 
 ```bash
 sudo nano /etc/reverse-tunnel.conf
 ```
 
-### 5. Запустите сервис
+### 6. Запустите сервис
 
 ```bash
 sudo systemctl start reverse-tunnel
@@ -76,11 +81,14 @@ sudo systemctl start reverse-tunnel
 
 Файл `/etc/reverse-tunnel.conf`:
 
-| Переменная | Описание | Пример |
+| Переменная | Описание | По умолчанию |
 |---|---|---|
-| `SSH_CONNECT` | Строка подключения к серверу | `user@server.example.com` |
-| `TUNNEL_PORT` | Порт на сервере для туннеля | `2222` |
-| `SSH_EXTRA_OPTS` | Дополнительные SSH-опции | `-o Compression=yes` |
+| `TUNNEL_USER` | Системный пользователь для туннеля | `tunnel-c1` |
+| `SSH_CONNECT` | Строка подключения к серверу (user@host + опции) | `user@server.example.com` |
+| `TUNNEL_PORT` | Порт на сервере для туннеля | `2232` |
+| `SSH_EXTRA_OPTS` | Дополнительные SSH-опции | _(пусто)_ |
+
+> **Важно**: после изменения `TUNNEL_USER` необходимо переустановить сервис (`sudo bash setup-reverse-tunnel.sh`), т.к. `User=` в systemd unit подставляется при установке.
 
 ### Примеры SSH_CONNECT
 
@@ -104,6 +112,13 @@ SSH_CONNECT="deploy@internal-server -p 2222 -J user@jumphost.example.com:2200"
 SSH_CONNECT="deploy@target -J user1@jump1,user2@jump2"
 ```
 
+**Реальный пример (IPv4, через прокси):**
+```bash
+SSH_CONNECT="nedlosster@38.135.122.149 -4 -J root@nlproxy"
+TUNNEL_PORT=2232
+SSH_EXTRA_OPTS="-A -o ServerAliveInterval=60"
+```
+
 ## Настройка на стороне сервера
 
 ### authorized_keys
@@ -111,7 +126,7 @@ SSH_CONNECT="deploy@target -J user1@jump1,user2@jump2"
 На сервере в `~/.ssh/authorized_keys` пользователя из `SSH_CONNECT` добавьте публичный ключ станции. Для ограничения прав можно использовать:
 
 ```
-no-pty,no-X11-forwarding,command="/bin/false" ssh-ed25519 AAAA... tunnel@station
+no-pty,no-X11-forwarding,command="/bin/false" ssh-ed25519 AAAA... tunnel-c1@station
 ```
 
 Это запретит интерактивный доступ, оставив только возможность создания туннеля.
@@ -127,8 +142,7 @@ GatewayPorts clientspecified
 И в конфиге станции:
 
 ```bash
-# Привязка к конкретному интерфейсу или ко всем
-SSH_EXTRA_OPTS="-R 0.0.0.0:2222:localhost:22"
+SSH_EXTRA_OPTS="-R 0.0.0.0:2232:localhost:22"
 ```
 
 > **Внимание**: открытие порта наружу требует дополнительных мер безопасности.
@@ -163,18 +177,18 @@ journalctl -u reverse-tunnel -n 50
 # Статус сервиса
 sudo systemctl status reverse-tunnel
 
-# Активные SSH-соединения пользователя tunnel
-ps -u tunnel -f
+# Активные SSH-соединения пользователя
+ps -u tunnel-c1 -f
 ```
 
 ### На сервере
 
 ```bash
 # Проверка что порт слушается
-ss -tlnp | grep <TUNNEL_PORT>
+ss -tlnp | grep 2232
 
 # Подключение к станции через туннель
-ssh -p <TUNNEL_PORT> user@localhost
+ssh -p 2232 user@localhost
 ```
 
 ### Kill-тест
@@ -197,24 +211,24 @@ journalctl -u reverse-tunnel -n 30 --no-pager
 Частые причины:
 - **Конфиг не отредактирован** — в `SSH_CONNECT` стоит `user@server.example.com`
 - **autossh не установлен** — `which autossh`
-- **Пользователь tunnel не существует** — `id tunnel`
+- **Пользователь не существует** — `id tunnel-c1`
 
 ### Connection refused / timeout
 
-- Проверьте сетевой доступ: `sudo -u tunnel ssh -v <SSH_CONNECT>`
+- Проверьте сетевой доступ: `sudo -u tunnel-c1 ssh -v <SSH_CONNECT>`
 - Убедитесь что SSH-сервер на удалённой стороне запущен
 - Проверьте firewall на сервере
 
 ### Ключ не принят сервером
 
-- Проверьте что публичный ключ добавлен: `cat /home/tunnel/.ssh/id_ed25519.pub`
+- Проверьте что публичный ключ добавлен: `cat /home/tunnel-c1/.ssh/id_ed25519.pub`
 - На сервере: права на `~/.ssh` (700) и `~/.ssh/authorized_keys` (600)
 - На сервере: `tail -f /var/log/auth.log` во время попытки подключения
 
 ### Туннель поднимается, но порт на сервере не слушается
 
-- На сервере: `ss -tlnp | grep <TUNNEL_PORT>`
-- Порт может быть занят: `ss -tlnp | grep <TUNNEL_PORT>` — если занят другим процессом, смените `TUNNEL_PORT`
+- На сервере: `ss -tlnp | grep 2232`
+- Порт может быть занят другим процессом — смените `TUNNEL_PORT`
 - Проверьте `ExitOnForwardFailure=yes` в логах — если порт занят, autossh завершится
 
 ### Частые переподключения
