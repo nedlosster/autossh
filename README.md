@@ -32,6 +32,7 @@
 autossh/
 ├── README.md                      # Этот файл
 ├── setup-reverse-tunnel.sh        # Скрипт установки
+├── reverse-tunnel-start.sh        # Wrapper-скрипт (ставится в /usr/local/bin/)
 ├── reverse-tunnel.conf.example    # Пример конфигурации
 └── reverse-tunnel.service         # Systemd unit (шаблон)
 ```
@@ -58,12 +59,15 @@ sudo bash setup-reverse-tunnel.sh
 - Создание системного пользователя (имя берётся из `TUNNEL_USER`, по умолчанию `tunnel-c1`)
 - Генерацию SSH-ключа `/home/<TUNNEL_USER>/.ssh/id_ed25519`
 - Копирование конфига в `/etc/reverse-tunnel.conf` (если не существует)
+- Установку wrapper-скрипта в `/usr/local/bin/`
 - Установку systemd-сервиса с подстановкой имени пользователя
 - Активацию сервиса (`enable`), но **без запуска**
 
 ### 4. Добавьте публичный ключ на сервер
 
 Скрипт выведет публичный ключ. Добавьте его в `~/.ssh/authorized_keys` того пользователя на сервере, который указан в `SSH_DESTINATION`.
+
+При использовании jump-хоста ключ нужно добавить и на jump-хост (для пользователя из `SSH_JUMP_HOST`), и на целевой сервер.
 
 ### 5. Отредактируйте конфигурацию
 
@@ -86,43 +90,41 @@ sudo systemctl start reverse-tunnel
 | `TUNNEL_USER` | Системный пользователь для туннеля | `tunnel-c1` |
 | `SSH_DESTINATION` | Адрес назначения (`user@host`) | `user@server.example.com` |
 | `TUNNEL_PORT` | Порт на сервере для туннеля | `2232` |
-| `SSH_EXTRA_OPTS` | Дополнительные SSH-опции (ProxyJump, IPv4 и пр.) | _(пусто)_ |
-
-> **Важно**: `SSH_DESTINATION` должен содержать только `user@host` — все SSH-опции (`-J`, `-p`, `-4` и пр.) указываются в `SSH_EXTRA_OPTS`. SSH требует, чтобы опции шли до адреса назначения.
+| `SSH_EXTRA_OPTS` | Дополнительные SSH-опции (`-4`, `-p` и пр.) | _(пусто)_ |
+| `SSH_JUMP_HOST` | Jump-хост (`user@host`) | _(пусто)_ |
 
 > **Важно**: после изменения `TUNNEL_USER` необходимо переустановить сервис (`sudo bash setup-reverse-tunnel.sh`), т.к. `User=` в systemd unit подставляется при установке.
+
+### Почему SSH_JUMP_HOST, а не `-J`?
+
+OpenSSH 8.x содержит баг: при использовании `-J` (ProxyJump) флаг `-R` пробрасывается в ProxyJump-подпроцесс, что вызывает ошибку `option requires an argument -- R`. Wrapper-скрипт конвертирует `SSH_JUMP_HOST` в `-o ProxyCommand=ssh -W %h:%p <jump_host>`, что работает корректно.
 
 ### Примеры конфигурации
 
 **Прямое подключение:**
 ```bash
 SSH_DESTINATION="deploy@192.168.1.100"
-SSH_EXTRA_OPTS=""
 ```
 
 **Через Jump-хост:**
 ```bash
 SSH_DESTINATION="deploy@internal-server"
-SSH_EXTRA_OPTS="-J user@jumphost.example.com"
+SSH_JUMP_HOST="user@jumphost.example.com"
 ```
 
-**Нестандартный порт + Jump-хост:**
+**Нестандартный порт Jump-хоста:**
 ```bash
 SSH_DESTINATION="deploy@internal-server"
-SSH_EXTRA_OPTS="-p 2222 -J user@jumphost.example.com:2200"
+SSH_JUMP_HOST="user@jumphost:2200"
 ```
 
-**Несколько Jump-хостов:**
+**IPv4 + Jump-хост (рабочий пример):**
 ```bash
-SSH_DESTINATION="deploy@target"
-SSH_EXTRA_OPTS="-J user1@jump1,user2@jump2"
-```
-
-**Реальный пример (IPv4, через прокси):**
-```bash
+TUNNEL_USER="tunnel-c1"
 SSH_DESTINATION="nedlosster@38.135.122.149"
 TUNNEL_PORT=2232
-SSH_EXTRA_OPTS="-4 -J root@nlproxy"
+SSH_EXTRA_OPTS="-4"
+SSH_JUMP_HOST="root@nlproxy"
 ```
 
 ## Настройка на стороне сервера
@@ -218,12 +220,14 @@ journalctl -u reverse-tunnel -n 30 --no-pager
 - Проверьте сетевой доступ: `sudo -u tunnel-c1 ssh $SSH_EXTRA_OPTS $SSH_DESTINATION`
 - Убедитесь что SSH-сервер на удалённой стороне запущен
 - Проверьте firewall на сервере
+- При использовании jump-хоста: `sudo -u tunnel-c1 ssh -o "ProxyCommand=ssh -W %h:%p $SSH_JUMP_HOST" $SSH_DESTINATION`
 
 ### Ключ не принят сервером
 
 - Проверьте что публичный ключ добавлен: `cat /home/tunnel-c1/.ssh/id_ed25519.pub`
 - На сервере: права на `~/.ssh` (700) и `~/.ssh/authorized_keys` (600)
 - На сервере: `tail -f /var/log/auth.log` во время попытки подключения
+- При jump-хосте: ключ должен быть добавлен и на jump-хост, и на целевой сервер
 
 ### Туннель поднимается, но порт на сервере не слушается
 
@@ -231,8 +235,13 @@ journalctl -u reverse-tunnel -n 30 --no-pager
 - Порт может быть занят другим процессом — смените `TUNNEL_PORT`
 - Проверьте `ExitOnForwardFailure=yes` в логах — если порт занят, autossh завершится
 
+### `option requires an argument -- R`
+
+- Убедитесь что jump-хост указан в `SSH_JUMP_HOST`, а не через `-J` в `SSH_EXTRA_OPTS`
+- OpenSSH 8.x пробрасывает `-R` в ProxyJump-подпроцесс при использовании `-J` — это баг
+
 ### Частые переподключения
 
 - Проверьте стабильность сети
-- Увеличьте `ServerAliveInterval` / `ServerAliveCountMax` в service-файле
+- Увеличьте `ServerAliveInterval` / `ServerAliveCountMax` в wrapper-скрипте
 - Проверьте `StartLimitBurst` — при 5 падениях за 300 сек systemd заблокирует сервис на время. Сброс: `sudo systemctl reset-failed reverse-tunnel`
