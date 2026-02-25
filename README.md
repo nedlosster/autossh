@@ -63,7 +63,7 @@ sudo bash setup-reverse-tunnel.sh
 
 ### 4. Добавьте публичный ключ на сервер
 
-Скрипт выведет публичный ключ. Добавьте его в `~/.ssh/authorized_keys` того пользователя на сервере, который указан в `SSH_CONNECT`.
+Скрипт выведет публичный ключ. Добавьте его в `~/.ssh/authorized_keys` того пользователя на сервере, который указан в `SSH_DESTINATION`.
 
 ### 5. Отредактируйте конфигурацию
 
@@ -84,46 +84,52 @@ sudo systemctl start reverse-tunnel
 | Переменная | Описание | По умолчанию |
 |---|---|---|
 | `TUNNEL_USER` | Системный пользователь для туннеля | `tunnel-c1` |
-| `SSH_CONNECT` | Строка подключения к серверу (user@host + опции) | `user@server.example.com` |
+| `SSH_DESTINATION` | Адрес назначения (`user@host`) | `user@server.example.com` |
 | `TUNNEL_PORT` | Порт на сервере для туннеля | `2232` |
-| `SSH_EXTRA_OPTS` | Дополнительные SSH-опции | _(пусто)_ |
+| `SSH_EXTRA_OPTS` | Дополнительные SSH-опции (ProxyJump, IPv4 и пр.) | _(пусто)_ |
+
+> **Важно**: `SSH_DESTINATION` должен содержать только `user@host` — все SSH-опции (`-J`, `-p`, `-4` и пр.) указываются в `SSH_EXTRA_OPTS`. SSH требует, чтобы опции шли до адреса назначения.
 
 > **Важно**: после изменения `TUNNEL_USER` необходимо переустановить сервис (`sudo bash setup-reverse-tunnel.sh`), т.к. `User=` в systemd unit подставляется при установке.
 
-### Примеры SSH_CONNECT
+### Примеры конфигурации
 
 **Прямое подключение:**
 ```bash
-SSH_CONNECT="deploy@192.168.1.100"
+SSH_DESTINATION="deploy@192.168.1.100"
+SSH_EXTRA_OPTS=""
 ```
 
 **Через Jump-хост:**
 ```bash
-SSH_CONNECT="deploy@internal-server -J user@jumphost.example.com"
+SSH_DESTINATION="deploy@internal-server"
+SSH_EXTRA_OPTS="-J user@jumphost.example.com"
 ```
 
 **Нестандартный порт + Jump-хост:**
 ```bash
-SSH_CONNECT="deploy@internal-server -p 2222 -J user@jumphost.example.com:2200"
+SSH_DESTINATION="deploy@internal-server"
+SSH_EXTRA_OPTS="-p 2222 -J user@jumphost.example.com:2200"
 ```
 
 **Несколько Jump-хостов:**
 ```bash
-SSH_CONNECT="deploy@target -J user1@jump1,user2@jump2"
+SSH_DESTINATION="deploy@target"
+SSH_EXTRA_OPTS="-J user1@jump1,user2@jump2"
 ```
 
 **Реальный пример (IPv4, через прокси):**
 ```bash
-SSH_CONNECT="nedlosster@38.135.122.149 -4 -J root@nlproxy"
+SSH_DESTINATION="nedlosster@38.135.122.149"
 TUNNEL_PORT=2232
-SSH_EXTRA_OPTS="-A -o ServerAliveInterval=60"
+SSH_EXTRA_OPTS="-4 -J root@nlproxy"
 ```
 
 ## Настройка на стороне сервера
 
 ### authorized_keys
 
-На сервере в `~/.ssh/authorized_keys` пользователя из `SSH_CONNECT` добавьте публичный ключ станции. Для ограничения прав можно использовать:
+На сервере в `~/.ssh/authorized_keys` пользователя из `SSH_DESTINATION` добавьте публичный ключ станции. Для ограничения прав можно использовать:
 
 ```
 no-pty,no-X11-forwarding,command="/bin/false" ssh-ed25519 AAAA... tunnel-c1@station
@@ -137,12 +143,6 @@ no-pty,no-X11-forwarding,command="/bin/false" ssh-ed25519 AAAA... tunnel-c1@stat
 
 ```
 GatewayPorts clientspecified
-```
-
-И в конфиге станции:
-
-```bash
-SSH_EXTRA_OPTS="-R 0.0.0.0:2232:localhost:22"
 ```
 
 > **Внимание**: открытие порта наружу требует дополнительных мер безопасности.
@@ -209,13 +209,13 @@ journalctl -u reverse-tunnel -n 30 --no-pager
 ```
 
 Частые причины:
-- **Конфиг не отредактирован** — в `SSH_CONNECT` стоит `user@server.example.com`
+- **Конфиг не отредактирован** — в `SSH_DESTINATION` стоит `user@server.example.com`
 - **autossh не установлен** — `which autossh`
 - **Пользователь не существует** — `id tunnel-c1`
 
 ### Connection refused / timeout
 
-- Проверьте сетевой доступ: `sudo -u tunnel-c1 ssh -v <SSH_CONNECT>`
+- Проверьте сетевой доступ: `sudo -u tunnel-c1 ssh $SSH_EXTRA_OPTS $SSH_DESTINATION`
 - Убедитесь что SSH-сервер на удалённой стороне запущен
 - Проверьте firewall на сервере
 
