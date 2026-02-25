@@ -1,0 +1,26 @@
+[Unit]
+Description=Persistent Reverse SSH Tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tunnel
+EnvironmentFile=/etc/reverse-tunnel.conf
+ExecStart=/usr/bin/autossh -M 0 -N -T \
+    -o "ServerAliveInterval=30" \
+    -o "ServerAliveCountMax=3" \
+    -o "ExitOnForwardFailure=yes" \
+    -o "StrictHostKeyChecking=accept-new" \
+    -o "TCPKeepAlive=yes" \
+    -i /home/tunnel/.ssh/id_ed25519 \
+    -R 127.0.0.1:${TUNNEL_PORT}:127.0.0.1:22 \
+    ${SSH_EXTRA_OPTS} \
+    ${SSH_CONNECT}
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+# Полная строка SSH-подключения к серверу (может включать ProxyJump и пр.)
+# Примеры:
+#   SSH_CONNECT="user@server.example.com"
+#   SSH_CONNECT="user@server.example.com -J jumphost.example.com"
+#   SSH_CONNECT="user@server.example.com -p 2222 -J user2@jump:22"
+#   SSH_CONNECT="nedlosster@38.135.122.149 -4 -J root@nlproxy"
+SSH_CONNECT="user@server.example.com"
+
+# Порт на СЕРВЕРЕ, через который будет доступна станция
+# (ssh -R 127.0.0.1:<TUNNEL_PORT>:127.0.0.1:22 ...)
+TUNNEL_PORT=2232
+
+# Дополнительные SSH-опции (необязательно)
+# SSH_EXTRA_OPTS="-o Compression=yes"
+# SSH_EXTRA_OPTS="-A -o ServerAliveInterval=60"
+SSH_EXTRA_OPTS=""
