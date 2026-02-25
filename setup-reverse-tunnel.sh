@@ -6,7 +6,14 @@ CONF_SRC="$SCRIPT_DIR/reverse-tunnel.conf.example"
 SERVICE_SRC="$SCRIPT_DIR/reverse-tunnel.service"
 CONF_DST="/etc/reverse-tunnel.conf"
 SERVICE_DST="/etc/systemd/system/reverse-tunnel.service"
-TUNNEL_USER="tunnel"
+
+# Читаем TUNNEL_USER из конфига (если конфиг уже установлен — из него, иначе из шаблона)
+if [[ -f "$CONF_DST" ]]; then
+    source "$CONF_DST"
+else
+    source "$CONF_SRC"
+fi
+TUNNEL_USER="${TUNNEL_USER:-tunnel-c1}"
 SSH_KEY="/home/$TUNNEL_USER/.ssh/id_ed25519"
 
 # ─── 1. Проверка root ────────────────────────────────────────────────
@@ -36,7 +43,7 @@ if [[ -f "$SSH_KEY" ]]; then
 else
     echo ">>> Генерация SSH-ключа (ed25519)..."
     mkdir -p "$(dirname "$SSH_KEY")"
-    ssh-keygen -t ed25519 -f "$SSH_KEY" -N "" -C "tunnel@$(hostname)"
+    ssh-keygen -t ed25519 -f "$SSH_KEY" -N "" -C "$TUNNEL_USER@$(hostname)"
     chown -R "$TUNNEL_USER":"$TUNNEL_USER" "/home/$TUNNEL_USER/.ssh"
     chmod 700 "/home/$TUNNEL_USER/.ssh"
     chmod 600 "$SSH_KEY"
@@ -66,9 +73,9 @@ else
     echo "    Конфиг скопирован."
 fi
 
-# ─── 7. Копирование systemd unit ─────────────────────────────────────
+# ─── 7. Копирование systemd unit (подстановка имени пользователя) ────
 echo ">>> Копирование systemd unit → $SERVICE_DST"
-cp "$SERVICE_SRC" "$SERVICE_DST"
+sed "s/__TUNNEL_USER__/$TUNNEL_USER/g" "$SERVICE_SRC" > "$SERVICE_DST"
 chmod 644 "$SERVICE_DST"
 
 # ─── 8. Reload и enable ──────────────────────────────────────────────

@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=tunnel
+User=__TUNNEL_USER__
 EnvironmentFile=/etc/reverse-tunnel.conf
 ExecStart=/usr/bin/autossh -M 0 -N -T \
     -o "ServerAliveInterval=30" \
@@ -13,7 +13,7 @@ ExecStart=/usr/bin/autossh -M 0 -N -T \
     -o "ExitOnForwardFailure=yes" \
     -o "StrictHostKeyChecking=accept-new" \
     -o "TCPKeepAlive=yes" \
-    -i /home/tunnel/.ssh/id_ed25519 \
+    -i /home/${TUNNEL_USER}/.ssh/id_ed25519 \
     -R 127.0.0.1:${TUNNEL_PORT}:127.0.0.1:22 \
     ${SSH_EXTRA_OPTS} \
     ${SSH_CONNECT}
