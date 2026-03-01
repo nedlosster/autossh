@@ -75,27 +75,48 @@ setup_common() {
 # --- Обновление known_hosts для connection ---
 update_known_hosts() {
     local known_hosts="/home/${TUNNEL_USER}/.ssh/known_hosts"
-    log_info "Обновляю known_hosts для $CONN_NAME ($CONN_HOST)..."
 
-    local scan_args=()
-    if [ "$CONN_PORT" != "22" ]; then
-        scan_args+=(-p "$CONN_PORT")
-    fi
-    scan_args+=("$CONN_HOST")
+    # Сканирование и добавление ключей хоста в known_hosts
+    _scan_host() {
+        local host="$1" port="${2:-22}" label="$3"
+        log_info "Обновляю known_hosts для $label ($host:$port)..."
 
-    local scanned
-    scanned=$(ssh-keyscan "${scan_args[@]}" 2>/dev/null) || true
-
-    if [ -n "$scanned" ]; then
-        if [ -f "$known_hosts" ] && echo "$scanned" | while read -r line; do
-            grep -qF "$line" "$known_hosts" 2>/dev/null
-        done; then
-            log_info "  known_hosts для $CONN_HOST уже актуален"
-        else
-            echo "$scanned" >> "$known_hosts"
-            log_info "  known_hosts обновлён для $CONN_HOST"
+        local scan_args=()
+        if [ "$port" != "22" ]; then
+            scan_args+=(-p "$port")
         fi
+        scan_args+=("$host")
+
+        local scanned
+        scanned=$(ssh-keyscan "${scan_args[@]}" 2>/dev/null) || true
+
+        if [ -n "$scanned" ]; then
+            if [ -f "$known_hosts" ] && echo "$scanned" | while read -r line; do
+                grep -qF "$line" "$known_hosts" 2>/dev/null
+            done; then
+                log_info "  known_hosts для $host уже актуален"
+            else
+                echo "$scanned" >> "$known_hosts"
+                log_info "  known_hosts обновлён для $host"
+            fi
+        fi
+    }
+
+    # Jump-хост (если задан)
+    if [ -n "${CONN_JUMP:-}" ]; then
+        local jump_host jump_port
+        # Парсим user@host:port или user@host
+        jump_host="${CONN_JUMP#*@}"
+        jump_port="${jump_host##*:}"
+        jump_host="${jump_host%%:*}"
+        if [ "$jump_port" = "$jump_host" ]; then
+            jump_port="22"
+        fi
+        _scan_host "$jump_host" "$jump_port" "jump ${CONN_NAME}"
     fi
+
+    # Целевой хост
+    _scan_host "$CONN_HOST" "$CONN_PORT" "$CONN_NAME"
 
     chown "${TUNNEL_USER}:${TUNNEL_USER}" "$known_hosts" 2>/dev/null || true
     chmod 644 "$known_hosts" 2>/dev/null || true
