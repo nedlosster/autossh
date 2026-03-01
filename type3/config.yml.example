@@ -1,0 +1,53 @@
+# ssh-tunnel-multihost — конфигурация
+# Скопируй в config.yml и отредактируй
+
+tunnel_user: tunnel               # Системный пользователь для всех туннелей
+log_dir: /var/log/ssh-tunnel
+
+defaults:
+  keepalive_interval: 30          # ServerAliveInterval
+  keepalive_count: 3              # ServerAliveCountMax
+  restart_delay: 10               # RestartSec в systemd
+  monitor_check_interval: 120     # Интервал watchdog (сек)
+  monitor_max_failures: 3         # Кол-во ошибок до рестарта
+
+hosts:
+  - name: prod                    # → autossh-tunnel-prod.service
+    host: 203.0.113.10            # Удалённый сервер
+    user: admin                   # SSH-юзер для setup (с sudo)
+    ssh_port: 22
+    jump_host: "root@bastion:2200"  # Опционально
+
+    # Обратные туннели (ssh -R): remote → local
+    tunnels:
+      - remote_port: 10080
+        local: "127.0.0.1:80"
+        name: HTTP
+
+      - remote_port: 10443
+        local: "127.0.0.1:443"
+        name: HTTPS
+
+      - remote_port: 12222
+        local: "192.168.0.28:2222"
+        name: GitLab-SSH
+
+    # Прямые туннели (ssh -L): local → remote
+    forwards:
+      - local_port: 3129
+        remote: "127.0.0.1:3128"
+        name: Squid-proxy
+
+  - name: backup                  # → autossh-tunnel-backup.service
+    host: 198.51.100.20
+    user: deploy
+
+    tunnels:
+      - remote_port: 10022
+        local: "127.0.0.1:22"
+        name: SSH
+
+    forwards:
+      - local_port: 5432
+        remote: "10.0.0.5:5432"
+        name: PostgreSQL
