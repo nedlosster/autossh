@@ -53,20 +53,6 @@ fi
 mkdir -p /var/log/ssh-tunnel
 chown autosshtunnels:autosshtunnels /var/log/ssh-tunnel
 
-# После обновления: восстановить сервисы, если unit-файлы существуют
-if [ "$1" -gt 1 ] 2>/dev/null; then
-    systemctl daemon-reload 2>/dev/null || true
-    for f in /etc/systemd/system/autossh-tunnel-*.service; do
-        [ -f "$f" ] || continue
-        svc="$(basename "$f")"
-        systemctl enable "$svc" 2>/dev/null || true
-        systemctl start "$svc" 2>/dev/null || true
-    done
-    if [ -f /etc/systemd/system/tunnel-watchdog.timer ]; then
-        systemctl enable tunnel-watchdog.timer 2>/dev/null || true
-        systemctl start tunnel-watchdog.timer 2>/dev/null || true
-    fi
-fi
 
 %preun
 if [ "$1" = "0" ]; then
@@ -109,4 +95,19 @@ if [ "$1" = "0" ]; then
     if id autosshtunnels &>/dev/null; then
         userdel -r autosshtunnels 2>/dev/null || true
     fi
+fi
+
+%posttrans
+# Выполняется после всех скриптлетов (и нового, и старого пакета)
+# Восстановить сервисы, если unit-файлы существуют
+systemctl daemon-reload 2>/dev/null || true
+for f in /etc/systemd/system/autossh-tunnel-*.service; do
+    [ -f "$f" ] || continue
+    svc="$(basename "$f")"
+    systemctl enable "$svc" 2>/dev/null || true
+    systemctl start "$svc" 2>/dev/null || true
+done
+if [ -f /etc/systemd/system/tunnel-watchdog.timer ]; then
+    systemctl enable tunnel-watchdog.timer 2>/dev/null || true
+    systemctl start tunnel-watchdog.timer 2>/dev/null || true
 fi
