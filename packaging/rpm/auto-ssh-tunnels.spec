@@ -53,12 +53,17 @@ fi
 mkdir -p /var/log/ssh-tunnel
 chown autosshtunnels:autosshtunnels /var/log/ssh-tunnel
 
-# После обновления: перезапуск enabled-сервисов
+# После обновления: восстановить сервисы, если unit-файлы существуют
 if [ "$1" -gt 1 ] 2>/dev/null; then
-    for svc in $(systemctl list-unit-files --type=service --no-legend 'autossh-tunnel-*' 2>/dev/null | awk '$2=="enabled"{print $1}'); do
+    systemctl daemon-reload 2>/dev/null || true
+    for f in /etc/systemd/system/autossh-tunnel-*.service; do
+        [ -f "$f" ] || continue
+        svc="$(basename "$f")"
+        systemctl enable "$svc" 2>/dev/null || true
         systemctl start "$svc" 2>/dev/null || true
     done
-    if systemctl is-enabled --quiet tunnel-watchdog.timer 2>/dev/null; then
+    if [ -f /etc/systemd/system/tunnel-watchdog.timer ]; then
+        systemctl enable tunnel-watchdog.timer 2>/dev/null || true
         systemctl start tunnel-watchdog.timer 2>/dev/null || true
     fi
 fi
