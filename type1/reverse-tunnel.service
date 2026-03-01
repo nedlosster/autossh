@@ -1,0 +1,16 @@
+[Unit]
+Description=Persistent Reverse SSH Tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__TUNNEL_USER__
+ExecStart=/usr/local/bin/reverse-tunnel-start.sh
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target
