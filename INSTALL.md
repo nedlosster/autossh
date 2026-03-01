@@ -10,7 +10,7 @@
 
 ## Установка из пакета
 
-Пакеты доступны на странице [Releases](https://github.com/nedlosster/autossh/releases).
+Пакеты доступны на странице [Releases](https://github.com/nedlosster/auto-ssh-tunnels/releases).
 
 ```bash
 # Ubuntu/Debian

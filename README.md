@@ -28,7 +28,7 @@
 
 ### Из пакета
 
-Готовые пакеты доступны на странице [Releases](https://github.com/nedlosster/autossh/releases).
+Готовые пакеты доступны на странице [Releases](https://github.com/nedlosster/auto-ssh-tunnels/releases).
 
 ```bash
 # Ubuntu/Debian
@@ -41,7 +41,7 @@ sudo apt-get install ./auto-ssh-tunnels-<VERSION>-alt1.noarch.rpm
 ### Из исходников
 
 ```bash
-git clone https://github.com/nedlosster/autossh.git
+git clone https://github.com/nedlosster/auto-ssh-tunnels.git
 cd autossh
 cp config.yml.example config.yml
 nano config.yml
