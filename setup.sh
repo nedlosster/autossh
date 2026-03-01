@@ -364,7 +364,7 @@ copy_key() {
     fi
     ssh_copy_args+=("${CONN_USER}@${CONN_HOST}")
 
-    # ssh-copy-id запускаем от имени tunnel-пользователя
+    # ssh-copy-id запускаем от имени пользователя autosshtunnels
     sudo -u "$TUNNEL_USER" ssh-copy-id "${ssh_copy_args[@]}" \
         || die "Не удалось скопировать SSH-ключ на $CONN_HOST"
 

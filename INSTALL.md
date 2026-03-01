@@ -1,103 +1,48 @@
 # auto-ssh-tunnels -- установка и настройка
 
-Менеджер SSH-туннелей. Управляет несколькими туннелями через единый YAML-конфиг,
-автоматически мониторит и перезапускает при сбоях.
-
 ## Требования
 
 - systemd
 - python3, python3-yaml (PyYAML)
-- Пакеты: autossh, openssh-client, netcat-openbsd
+- autossh, openssh-client, netcat-openbsd
 
 Поддерживаемые ОС: Ubuntu/Debian, ALT Linux.
 
 ## Установка из пакета
 
+Пакеты доступны на странице [Releases](https://github.com/nedlosster/autossh/releases).
+
 ```bash
 # Ubuntu/Debian
-sudo apt install ./auto-ssh-tunnels_1.0.0_all.deb
+sudo apt install ./auto-ssh-tunnels_<VERSION>_all.deb
 
 # ALT Linux
-sudo apt-get install ./auto-ssh-tunnels-1.0.0-alt1.noarch.rpm
-
-# Настройка
-sudo nano /etc/auto-ssh-tunnels/config.yml
-sudo auto-ssh-tunnels full
+sudo apt-get install ./auto-ssh-tunnels-<VERSION>-alt1.noarch.rpm
 ```
 
 При установке из пакета:
 - Зависимости устанавливаются менеджером пакетов
 - Конфиг: `/etc/auto-ssh-tunnels/config.yml`
-- Команда: `auto-ssh-tunnels`
-- Пользователь `autosshtunnels`, SSH-ключ и директория логов создаются при установке (postinst)
+- Команда: `auto-ssh-tunnels` (на ALT Linux: `/usr/sbin/auto-ssh-tunnels`)
+- Системный пользователь `autosshtunnels`, SSH-ключ и директория логов создаются автоматически
 
 ## Установка из исходников
 
 ```bash
 cp config.yml.example config.yml
-nano config.yml                       # указать реальные серверы
-sudo bash setup.sh                    # установка
-sudo bash setup.sh copy-key <name>    # скопировать SSH-ключ на сервер
-bash setup.sh status                  # проверка
+nano config.yml
+sudo bash setup.sh
 ```
 
 ## Конфигурация
 
-Файл `config.yml`:
+Формат `config.yml` описан в [README.md](README.md#конфигурация).
 
-```yaml
-tunnel_user: autosshtunnels       # системный пользователь для autossh
-log_dir: /var/log/ssh-tunnel
-
-defaults:
-  keepalive_interval: 30          # ServerAliveInterval (сек)
-  keepalive_count: 3              # ServerAliveCountMax
-  restart_delay: 10               # RestartSec для systemd
-  monitor_interval: 120           # интервал watchdog (сек)
-  monitor_max_failures: 3         # ошибок до рестарта
-
-connections:
-  - name: prod                    # уникальное имя
-    server: admin@1.2.3.4:22      # user@host[:port]
-    args: "-R 10080:127.0.0.1:80" # аргументы autossh (-R, -L, -A)
-    jump: "root@bastion:2200"     # опционально: jump-хост
-```
-
-### Поле `args`
-
-Стандартные SSH-флаги проброса портов:
-
-| Флаг | Назначение | Пример |
-|------|-----------|--------|
-| `-R rport:host:hport` | Обратный туннель (remote forward) | `-R 10022:127.0.0.1:22` |
-| `-L lport:host:hport` | Прямой туннель (local forward) | `-L 3129:127.0.0.1:3128` |
-| `-A` | Проброс SSH-агента | `-A` |
-
-Несколько флагов через пробел: `"-R 10022:127.0.0.1:22 -R 10080:127.0.0.1:80 -L 3129:127.0.0.1:3128"`.
-
-## Команды
-
-| Команда | Описание |
-|---------|----------|
-| `sudo auto-ssh-tunnels` | Полная установка: пакеты, пользователь, ключ, systemd-юниты, watchdog |
-| `sudo auto-ssh-tunnels full` | То же самое (явно) |
-| `auto-ssh-tunnels dry-run` | Предпросмотр генерируемых конфигов без записи на диск |
-| `auto-ssh-tunnels status` | Статус сервисов + проверка доступности портов |
-| `sudo auto-ssh-tunnels restart [name]` | Перезапуск всех или указанного туннеля |
-| `sudo auto-ssh-tunnels copy-key <name>` | Копирование SSH-ключа на целевой сервер |
-
-При установке из исходников вместо `auto-ssh-tunnels` использовать `bash setup.sh`.
-
-## Что делает установка
-
-1. Устанавливает пакеты (autossh, openssh-client, netcat)
-2. Создает системного пользователя `autosshtunnels` с домашней директорией
-3. Генерирует SSH-ключ Ed25519 (`/home/autosshtunnels/.ssh/id_ed25519`)
-4. Создает директорию логов (`/var/log/ssh-tunnel`)
-5. Для каждого connection генерирует systemd-сервис `autossh-tunnel-<name>.service`
-6. Генерирует watchdog: `tunnel-health.sh` + `tunnel-watchdog.timer` (периодическая проверка портов)
-7. Настраивает logrotate для ротации логов
-8. Активирует и запускает все сервисы
+Ключевые моменты:
+- `tunnel_user` -- системный пользователь для autossh-процессов (по умолчанию `autosshtunnels`)
+- `connections[].server` -- формат `user@host[:port]`
+- `connections[].args` -- SSH-аргументы: `-R`, `-L`, `-A`
+- `connections[].jump` -- jump-хост (опционально): `user@host[:port]`
 
 ## Развёртывание по шагам
 
@@ -118,7 +63,7 @@ nano config.yml
 auto-ssh-tunnels dry-run
 ```
 
-Выведет все генерируемые файлы. Убедиться, что параметры корректны.
+Выведет все генерируемые systemd-юниты, health-check скрипт и logrotate конфиг.
 
 ### 3. Установка
 
@@ -126,22 +71,25 @@ auto-ssh-tunnels dry-run
 sudo auto-ssh-tunnels full
 ```
 
-### 4. Копирование SSH-ключа на целевые серверы
+Создаёт пользователя, SSH-ключ, systemd-сервисы, watchdog timer, logrotate. Сканирует и добавляет в known_hosts ключи jump-хостов и целевых серверов.
 
-Для каждого connection:
+### 4. Копирование SSH-ключа
+
+SSH-ключ пользователя `autosshtunnels` нужно добавить в `authorized_keys` на целевом сервере. Если задан jump-хост -- на jump-хосте тоже.
+
+Через встроенную команду (копирует на целевой сервер через jump):
 
 ```bash
-sudo auto-ssh-tunnels copy-key prod
+sudo auto-ssh-tunnels copy-key <name>
 ```
 
-Потребуется пароль от целевого сервера. После копирования ключ будет в
-`~/.ssh/authorized_keys` на стороне сервера.
-
-Альтернативно -- вручную:
+Вручную:
 
 ```bash
+# Получить публичный ключ
 sudo cat /home/autosshtunnels/.ssh/id_ed25519.pub
-# скопировать вывод в authorized_keys на целевом сервере
+
+# Добавить в authorized_keys на целевом сервере и jump-хосте
 ```
 
 ### 5. Проверка
@@ -150,56 +98,32 @@ sudo cat /home/autosshtunnels/.ssh/id_ed25519.pub
 auto-ssh-tunnels status
 ```
 
-Вывод показывает статус каждого сервиса и доступность пробрасываемых портов.
+Показывает статус каждого сервиса, проверяет доступность `-R` портов на remote и `-L` портов локально.
 
-## Логи
+## Команды
 
-```bash
-# systemd-журнал конкретного туннеля
-journalctl -u autossh-tunnel-<name> -f
+| Команда | Описание |
+|---------|----------|
+| `sudo auto-ssh-tunnels` | Полная установка |
+| `sudo auto-ssh-tunnels full` | То же самое (явно) |
+| `auto-ssh-tunnels dry-run` | Предпросмотр генерируемых конфигов |
+| `auto-ssh-tunnels status` | Статус сервисов и проверка портов |
+| `sudo auto-ssh-tunnels restart [name]` | Перезапуск всех или указанного туннеля |
+| `sudo auto-ssh-tunnels copy-key <name>` | Копирование SSH-ключа на целевой сервер |
 
-# лог-файлы autossh
-ls /var/log/ssh-tunnel/
+При установке из исходников вместо `auto-ssh-tunnels` использовать `bash setup.sh`.
 
-# статус watchdog
-journalctl -u tunnel-watchdog.timer
-```
+## Что делает установка
 
-## Управление туннелями
-
-```bash
-# перезапуск конкретного
-sudo auto-ssh-tunnels restart prod
-
-# перезапуск всех
-sudo auto-ssh-tunnels restart
-
-# ручное управление через systemctl
-sudo systemctl stop autossh-tunnel-prod
-sudo systemctl start autossh-tunnel-prod
-sudo systemctl status autossh-tunnel-prod
-```
-
-## Watchdog
-
-Автоматический мониторинг: timer запускает `tunnel-health.sh` каждые N секунд
-(параметр `monitor_interval`). Скрипт проверяет:
-
-- Активность systemd-сервиса
-- Доступность remote-портов (`-R`) через SSH + `nc -z`
-- Доступность local-портов (`-L`) через `nc -z`
-
-При `monitor_max_failures` последовательных ошибках -- автоматический рестарт туннеля.
-
-## Обновление конфигурации
-
-При изменении `config.yml` повторно запустить:
-
-```bash
-sudo auto-ssh-tunnels full
-```
-
-Скрипт идемпотентен: обновит только изменившиеся файлы и перезапустит затронутые сервисы.
+1. Устанавливает пакеты (autossh, openssh-client, netcat)
+2. Создаёт системного пользователя `autosshtunnels` с домашней директорией
+3. Генерирует SSH-ключ Ed25519 (`/home/autosshtunnels/.ssh/id_ed25519`)
+4. Создаёт директорию логов (`/var/log/ssh-tunnel`)
+5. Сканирует ключи jump-хостов и целевых серверов в known_hosts
+6. Генерирует systemd-сервис `autossh-tunnel-<name>.service` для каждого connection
+7. Генерирует watchdog: `tunnel-health.sh` + `tunnel-watchdog.timer`
+8. Настраивает logrotate для ротации логов
+9. Включает (enable) и запускает все сервисы
 
 ## Структура файлов на целевой системе
 
@@ -215,7 +139,34 @@ sudo auto-ssh-tunnels full
 /home/autosshtunnels/.ssh/
   id_ed25519                       # приватный ключ
   id_ed25519.pub                   # публичный ключ
-  known_hosts                      # ключи серверов
+  known_hosts                      # ключи серверов (jump + target)
 /etc/logrotate.d/
   ssh-tunnel                       # ротация логов
 ```
+
+## Логи
+
+```bash
+# systemd-журнал конкретного туннеля
+journalctl -u autossh-tunnel-<name> -f
+
+# лог-файлы autossh
+ls /var/log/ssh-tunnel/
+
+# статус watchdog
+journalctl -u tunnel-watchdog.timer
+```
+
+## Обновление конфигурации
+
+При изменении `config.yml` повторно запустить:
+
+```bash
+sudo auto-ssh-tunnels full
+```
+
+Скрипт идемпотентен: обновит только изменившиеся файлы и перезапустит затронутые сервисы.
+
+## Обновление пакета
+
+При обновлении пакета (deb/rpm) сервисы останавливаются, обновляются файлы, затем сервисы автоматически включаются и запускаются. Конфиг `/etc/auto-ssh-tunnels/config.yml` не перезатирается.

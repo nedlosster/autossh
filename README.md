@@ -32,17 +32,17 @@
 
 ```bash
 # Ubuntu/Debian
-sudo apt install ./auto-ssh-tunnels_1.0.0_all.deb
+sudo apt install ./auto-ssh-tunnels_<VERSION>_all.deb
 
 # ALT Linux
-sudo apt-get install ./auto-ssh-tunnels-1.0.0-alt1.noarch.rpm
+sudo apt-get install ./auto-ssh-tunnels-<VERSION>-alt1.noarch.rpm
 ```
 
 ### Из исходников
 
 ```bash
-git clone <repo-url>
-cd auto-ssh-tunnels
+git clone https://github.com/nedlosster/autossh.git
+cd autossh
 cp config.yml.example config.yml
 nano config.yml
 sudo bash setup.sh
@@ -52,7 +52,9 @@ sudo bash setup.sh
 
 ## Конфигурация
 
-Файл `config.yml`:
+Файл конфига:
+- из пакета: `/etc/auto-ssh-tunnels/config.yml`
+- из исходников: `config.yml` в директории проекта
 
 ```yaml
 tunnel_user: autosshtunnels
@@ -73,10 +75,19 @@ connections:
 
   - name: backup
     server: deploy@198.51.100.20
-    args: "-R 10022:127.0.0.1:22 -A"
+    args: "-R 10022:127.0.0.1:22"
 ```
 
-### Поле `args`
+### Параметры connection
+
+| Поле | Обязательно | Описание |
+|------|:-----------:|----------|
+| `name` | да | Уникальное имя (используется в имени systemd-сервиса) |
+| `server` | да | `user@host[:port]` -- целевой SSH-сервер |
+| `args` | да | Аргументы SSH: `-R`, `-L`, `-A` и др. |
+| `jump` | нет | Jump-хост: `user@host[:port]` (ProxyCommand) |
+
+### Флаги в `args`
 
 | Флаг | Назначение | Пример |
 |------|-----------|--------|
@@ -84,12 +95,14 @@ connections:
 | `-L lport:host:hport` | Прямой туннель (local forward) | `-L 3129:127.0.0.1:3128` |
 | `-A` | Проброс SSH-агента | `-A` |
 
+Несколько флагов через пробел: `"-R 10022:127.0.0.1:22 -L 3129:127.0.0.1:3128"`.
+
 ## Команды
 
 ```bash
 sudo auto-ssh-tunnels              # полная установка
 sudo auto-ssh-tunnels full         # то же самое (явно)
-auto-ssh-tunnels dry-run           # предпросмотр конфигов
+auto-ssh-tunnels dry-run           # предпросмотр генерируемых конфигов
 auto-ssh-tunnels status            # статус сервисов и портов
 sudo auto-ssh-tunnels restart [name]  # перезапуск туннелей
 sudo auto-ssh-tunnels copy-key <name> # копирование SSH-ключа на сервер
@@ -109,9 +122,8 @@ sudo auto-ssh-tunnels copy-key <name> # копирование SSH-ключа н
 /var/log/ssh-tunnel/
   autossh-<name>.log               # логи autossh
 /home/autosshtunnels/.ssh/
-  id_ed25519                       # приватный ключ
-  id_ed25519.pub                   # публичный ключ
-  known_hosts                      # ключи серверов
+  id_ed25519                       # SSH-ключ (создаётся при установке)
+  known_hosts                      # ключи серверов (jump + target)
 /etc/logrotate.d/
   ssh-tunnel                       # ротация логов
 ```

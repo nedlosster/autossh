@@ -3,14 +3,20 @@
 ## Требования
 
 - **deb**: `dpkg-deb` (пакет `dpkg-dev`)
-- **rpm**: `rpmbuild` (пакет `rpm-build` / `rpm-utils` на ALT Linux)
+- **rpm**: `rpmbuild` (пакет `rpm` на Ubuntu/Debian, `rpm-build` на ALT Linux)
 
 ## Версия
 
-Версия задаётся в файле `packaging/VERSION`. Обновить перед релизом:
+Версия задаётся в файле `packaging/VERSION`:
 
 ```bash
-echo "1.1.0" > packaging/VERSION
+cat packaging/VERSION
+```
+
+Обновить через release.sh:
+
+```bash
+bash release.sh bump <X.Y.Z>
 ```
 
 ## Сборка
@@ -32,8 +38,8 @@ bash build.sh clean
 ```
 
 Результат -- в `packaging/_out/`:
-- `auto-ssh-tunnels_<version>_all.deb`
-- `auto-ssh-tunnels-<version>-alt1.noarch.rpm`
+- `auto-ssh-tunnels_<VERSION>_all.deb`
+- `auto-ssh-tunnels-<VERSION>-alt1.noarch.rpm`
 
 ## Проверка метаданных
 
@@ -45,36 +51,40 @@ dpkg -I packaging/_out/auto-ssh-tunnels_*.deb
 rpm -qpi packaging/_out/auto-ssh-tunnels-*.rpm
 ```
 
-## Установка на целевую систему
+## Установка
 
 ```bash
 # Ubuntu/Debian
-sudo apt install ./auto-ssh-tunnels_1.0.0_all.deb
+sudo apt install ./auto-ssh-tunnels_<VERSION>_all.deb
 
 # ALT Linux
-sudo apt-get install ./auto-ssh-tunnels-1.0.0-alt1.noarch.rpm
+sudo apt-get install ./auto-ssh-tunnels-<VERSION>-alt1.noarch.rpm
 ```
 
 ## Релиз
 
-Скрипт `release.sh` автоматизирует сборку и публикацию:
+Скрипт `release.sh` автоматизирует полный цикл: сборка, тегирование, публикация на GitHub.
 
 ```bash
-# Собрать пакеты (deb, rpm при наличии rpmbuild)
+# Собрать пакеты (deb обязателен, rpm -- при наличии rpmbuild)
 bash release.sh build
 
-# Собрать + создать git tag + опубликовать GitHub release
+# Собрать + создать git tag + push + GitHub release с артефактами
 bash release.sh publish
 
 # Обновить версию
-bash release.sh bump 1.1.0
+bash release.sh bump <X.Y.Z>
 
 # Dry-run (показать действия без выполнения)
 bash release.sh -d publish
 ```
 
-Команда `publish` выполняет: проверку чистого working tree, сборку пакетов,
-создание тега `vX.Y.Z`, push, загрузку артефактов в GitHub release.
+Команда `publish`:
+1. Проверяет чистый working tree и отсутствие тега
+2. Собирает deb (и rpm при наличии rpmbuild)
+3. Создаёт тег `v<VERSION>`
+4. Push в remote (master + tags)
+5. Создаёт GitHub release с deb/rpm артефактами
 
 ## FHS-пути в пакете
 
