@@ -1,0 +1,26 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    purge)
+        # Удаление сгенерированных systemd-юнитов
+        rm -f /etc/systemd/system/autossh-tunnel-*.service
+        rm -f /etc/systemd/system/tunnel-watchdog.service
+        rm -f /etc/systemd/system/tunnel-watchdog.timer
+        systemctl daemon-reload 2>/dev/null || true
+
+        # Удаление health-check и logrotate
+        rm -f /usr/local/bin/tunnel-health.sh
+        rm -f /etc/logrotate.d/ssh-tunnel
+
+        # Удаление логов
+        rm -rf /var/log/ssh-tunnel
+
+        # Удаление пользователя tunnel
+        if id tunnel &>/dev/null; then
+            userdel -r tunnel 2>/dev/null || true
+        fi
+        ;;
+esac
+
+exit 0

@@ -1,0 +1,10 @@
+Package: auto-ssh-tunnels
+Version: @VERSION@
+Section: net
+Priority: optional
+Architecture: all
+Depends: autossh, openssh-client, netcat-openbsd, python3, python3-yaml, systemd
+Maintainer: nedlosster <nedlo@yandex.ru>
+Description: SSH tunnel manager with YAML config
+ Manages multiple persistent SSH tunnels via a single YAML configuration.
+ Generates systemd services, health-check watchdog, and logrotate configs.

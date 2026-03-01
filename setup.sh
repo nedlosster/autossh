@@ -1,39 +1,49 @@
 #!/bin/bash
-# type4 — лаконичный SSH-туннель менеджер
-# Управление SSH-туннелями с лаконичным конфигом (args напрямую).
+# auto-ssh-tunnels — менеджер SSH-туннелей
+# Управление SSH-туннелями через единый YAML-конфиг.
 # Запускается на локальном сервере. Remote не настраивается.
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONFIG_FILE="${SCRIPT_DIR}/config.yml"
+PKG_NAME="auto-ssh-tunnels"
+if [ -d "/usr/lib/${PKG_NAME}" ] && [ -f "/usr/lib/${PKG_NAME}/lib.sh" ]; then
+    LIB_DIR="/usr/lib/${PKG_NAME}"
+    CONFIG_FILE="/etc/${PKG_NAME}/config.yml"
+    PKG_MODE=true
+else
+    LIB_DIR="$(cd "$(dirname "$0")" && pwd)"
+    CONFIG_FILE="${LIB_DIR}/config.yml"
+    PKG_MODE=false
+fi
 
 # --- Подключаем модули ---
-source "${SCRIPT_DIR}/lib.sh"
-source "${SCRIPT_DIR}/generate.sh"
+source "${LIB_DIR}/lib.sh"
+source "${LIB_DIR}/generate.sh"
 
 # --- Загрузка глобальных переменных ---
 load_globals() {
     [ -f "$CONFIG_FILE" ] || die "Конфиг не найден: $CONFIG_FILE. Скопируй config.yml.example в config.yml"
     check_python3
-    eval "$(python3 "${SCRIPT_DIR}/parse-config.py" "$CONFIG_FILE" --globals)"
-    eval "$(python3 "${SCRIPT_DIR}/parse-config.py" "$CONFIG_FILE" --count)"
+    eval "$(python3 "${LIB_DIR}/parse-config.py" "$CONFIG_FILE" --globals)"
+    eval "$(python3 "${LIB_DIR}/parse-config.py" "$CONFIG_FILE" --count)"
     [ "$CONN_COUNT" -gt 0 ] || die "Нет connections в конфиге"
 }
 
 # --- Загрузка переменных конкретного connection ---
 load_connection() {
     local idx="$1"
-    eval "$(python3 "${SCRIPT_DIR}/parse-config.py" "$CONFIG_FILE" --connection "$idx")"
+    eval "$(python3 "${LIB_DIR}/parse-config.py" "$CONFIG_FILE" --connection "$idx")"
 }
 
 # --- Общая локальная настройка (один раз) ---
 setup_common() {
     log_step "Общая настройка"
 
-    # 1. Пакеты
-    log_info "Проверка пакетов..."
-    apt_install autossh openssh-client netcat-openbsd
+    # 1. Пакеты (в пакетном режиме зависимости решены менеджером пакетов)
+    if ! $PKG_MODE; then
+        log_info "Проверка пакетов..."
+        apt_install autossh openssh-client netcat-openbsd
+    fi
 
     # 2. Пользователь tunnel
     if ! id "$TUNNEL_USER" &>/dev/null; then

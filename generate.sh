@@ -1,5 +1,5 @@
 #!/bin/bash
-# Генерация конфигурационных файлов для type4 (лаконичный туннель менеджер)
+# Генерация конфигурационных файлов для auto-ssh-tunnels
 
 # --- autossh systemd service (per connection) ---
 # Использует переменные: CONN_NAME, CONN_HOST, CONN_USER, CONN_PORT, CONN_ARGS,

@@ -1,20 +1,39 @@
-# type4 -- установка и настройка
+# auto-ssh-tunnels -- установка и настройка
 
-Менеджер обратных SSH-туннелей. Управляет несколькими туннелями через единый YAML-конфиг,
+Менеджер SSH-туннелей. Управляет несколькими туннелями через единый YAML-конфиг,
 автоматически мониторит и перезапускает при сбоях.
 
 ## Требования
 
 - systemd
 - python3, python3-yaml (PyYAML)
-- Пакеты устанавливаются автоматически: autossh, openssh-client, netcat-openbsd
+- Пакеты: autossh, openssh-client, netcat-openbsd
 
 Поддерживаемые ОС: Ubuntu/Debian, ALT Linux.
 
-## Быстрый старт
+## Установка из пакета
 
 ```bash
-cd type4
+# Ubuntu/Debian
+sudo apt install ./auto-ssh-tunnels_1.0.0_all.deb
+
+# ALT Linux
+sudo apt-get install ./auto-ssh-tunnels-1.0.0-alt1.noarch.rpm
+
+# Настройка
+sudo nano /etc/auto-ssh-tunnels/config.yml
+sudo auto-ssh-tunnels full
+```
+
+При установке из пакета:
+- Зависимости устанавливаются менеджером пакетов
+- Конфиг: `/etc/auto-ssh-tunnels/config.yml`
+- Команда: `auto-ssh-tunnels`
+- Пользователь `tunnel`, SSH-ключ и директория логов создаются при установке (postinst)
+
+## Установка из исходников
+
+```bash
 cp config.yml.example config.yml
 nano config.yml                       # указать реальные серверы
 sudo bash setup.sh                    # установка
@@ -56,18 +75,20 @@ connections:
 
 Несколько флагов через пробел: `"-R 10022:127.0.0.1:22 -R 10080:127.0.0.1:80 -L 3129:127.0.0.1:3128"`.
 
-## Команды setup.sh
+## Команды
 
 | Команда | Описание |
 |---------|----------|
-| `sudo bash setup.sh` | Полная установка: пакеты, пользователь, ключ, systemd-юниты, watchdog |
-| `sudo bash setup.sh full` | То же самое (явно) |
-| `bash setup.sh dry-run` | Предпросмотр генерируемых конфигов без записи на диск |
-| `bash setup.sh status` | Статус сервисов + проверка доступности портов |
-| `sudo bash setup.sh restart [name]` | Перезапуск всех или указанного туннеля |
-| `sudo bash setup.sh copy-key <name>` | Копирование SSH-ключа на целевой сервер |
+| `sudo auto-ssh-tunnels` | Полная установка: пакеты, пользователь, ключ, systemd-юниты, watchdog |
+| `sudo auto-ssh-tunnels full` | То же самое (явно) |
+| `auto-ssh-tunnels dry-run` | Предпросмотр генерируемых конфигов без записи на диск |
+| `auto-ssh-tunnels status` | Статус сервисов + проверка доступности портов |
+| `sudo auto-ssh-tunnels restart [name]` | Перезапуск всех или указанного туннеля |
+| `sudo auto-ssh-tunnels copy-key <name>` | Копирование SSH-ключа на целевой сервер |
 
-## Что делает `setup.sh` при установке
+При установке из исходников вместо `auto-ssh-tunnels` использовать `bash setup.sh`.
+
+## Что делает установка
 
 1. Устанавливает пакеты (autossh, openssh-client, netcat)
 2. Создает системного пользователя `tunnel` с домашней директорией
@@ -83,6 +104,10 @@ connections:
 ### 1. Подготовка конфига
 
 ```bash
+# Из пакета
+sudo nano /etc/auto-ssh-tunnels/config.yml
+
+# Из исходников
 cp config.yml.example config.yml
 nano config.yml
 ```
@@ -90,7 +115,7 @@ nano config.yml
 ### 2. Проверка (dry-run)
 
 ```bash
-bash setup.sh dry-run
+auto-ssh-tunnels dry-run
 ```
 
 Выведет все генерируемые файлы. Убедиться, что параметры корректны.
@@ -98,7 +123,7 @@ bash setup.sh dry-run
 ### 3. Установка
 
 ```bash
-sudo bash setup.sh
+sudo auto-ssh-tunnels full
 ```
 
 ### 4. Копирование SSH-ключа на целевые серверы
@@ -106,7 +131,7 @@ sudo bash setup.sh
 Для каждого connection:
 
 ```bash
-sudo bash setup.sh copy-key prod
+sudo auto-ssh-tunnels copy-key prod
 ```
 
 Потребуется пароль от целевого сервера. После копирования ключ будет в
@@ -122,7 +147,7 @@ sudo cat /home/tunnel/.ssh/id_ed25519.pub
 ### 5. Проверка
 
 ```bash
-bash setup.sh status
+auto-ssh-tunnels status
 ```
 
 Вывод показывает статус каждого сервиса и доступность пробрасываемых портов.
@@ -144,10 +169,10 @@ journalctl -u tunnel-watchdog.timer
 
 ```bash
 # перезапуск конкретного
-sudo bash setup.sh restart prod
+sudo auto-ssh-tunnels restart prod
 
 # перезапуск всех
-sudo bash setup.sh restart
+sudo auto-ssh-tunnels restart
 
 # ручное управление через systemctl
 sudo systemctl stop autossh-tunnel-prod
@@ -171,7 +196,7 @@ sudo systemctl status autossh-tunnel-prod
 При изменении `config.yml` повторно запустить:
 
 ```bash
-sudo bash setup.sh
+sudo auto-ssh-tunnels full
 ```
 
 Скрипт идемпотентен: обновит только изменившиеся файлы и перезапустит затронутые сервисы.

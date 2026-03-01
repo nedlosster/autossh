@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    remove|upgrade)
+        # Остановка и отключение autossh-tunnel-* сервисов
+        for svc in $(systemctl list-units --type=service --no-legend 'autossh-tunnel-*' 2>/dev/null | awk '{print $1}'); do
+            systemctl stop "$svc" 2>/dev/null || true
+            systemctl disable "$svc" 2>/dev/null || true
+        done
+
+        # Остановка watchdog
+        systemctl stop tunnel-watchdog.timer 2>/dev/null || true
+        systemctl disable tunnel-watchdog.timer 2>/dev/null || true
+        systemctl stop tunnel-watchdog.service 2>/dev/null || true
+        systemctl disable tunnel-watchdog.service 2>/dev/null || true
+        ;;
+esac
+
+exit 0

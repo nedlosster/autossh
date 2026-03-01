@@ -1,0 +1,28 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    configure)
+        # Пользователь tunnel
+        if ! id tunnel &>/dev/null; then
+            useradd -r -m -s /bin/bash tunnel
+        fi
+
+        # SSH-ключ
+        SSH_DIR="/home/tunnel/.ssh"
+        KEY_FILE="${SSH_DIR}/id_ed25519"
+        if [ ! -f "$KEY_FILE" ]; then
+            mkdir -p "$SSH_DIR"
+            ssh-keygen -t ed25519 -f "$KEY_FILE" -N "" -C "tunnel@$(hostname)"
+            chown -R tunnel:tunnel "$SSH_DIR"
+            chmod 700 "$SSH_DIR"
+            chmod 600 "$KEY_FILE"
+        fi
+
+        # Директория логов
+        mkdir -p /var/log/ssh-tunnel
+        chown tunnel:tunnel /var/log/ssh-tunnel
+        ;;
+esac
+
+exit 0
