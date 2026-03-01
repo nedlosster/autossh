@@ -22,6 +22,14 @@ case "$1" in
         # Директория логов
         mkdir -p /var/log/ssh-tunnel
         chown autosshtunnels:autosshtunnels /var/log/ssh-tunnel
+
+        # После обновления: перезапуск enabled-сервисов
+        for svc in $(systemctl list-unit-files --type=service --no-legend 'autossh-tunnel-*' 2>/dev/null | awk '$2=="enabled"{print $1}'); do
+            systemctl start "$svc" 2>/dev/null || true
+        done
+        if systemctl is-enabled --quiet tunnel-watchdog.timer 2>/dev/null; then
+            systemctl start tunnel-watchdog.timer 2>/dev/null || true
+        fi
         ;;
 esac
 

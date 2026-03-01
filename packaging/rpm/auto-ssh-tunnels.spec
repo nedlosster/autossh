@@ -53,19 +53,36 @@ fi
 mkdir -p /var/log/ssh-tunnel
 chown autosshtunnels:autosshtunnels /var/log/ssh-tunnel
 
+# После обновления: перезапуск enabled-сервисов
+if [ "$1" -gt 1 ] 2>/dev/null; then
+    for svc in $(systemctl list-unit-files --type=service --no-legend 'autossh-tunnel-*' 2>/dev/null | awk '$2=="enabled"{print $1}'); do
+        systemctl start "$svc" 2>/dev/null || true
+    done
+    if systemctl is-enabled --quiet tunnel-watchdog.timer 2>/dev/null; then
+        systemctl start tunnel-watchdog.timer 2>/dev/null || true
+    fi
+fi
+
 %preun
 if [ "$1" = "0" ]; then
-    # Остановка autossh-tunnel-* сервисов
+    # Полное удаление: остановка и отключение
     for svc in $(systemctl list-units --type=service --no-legend 'autossh-tunnel-*' 2>/dev/null | awk '{print $1}'); do
         systemctl stop "$svc" 2>/dev/null || true
         systemctl disable "$svc" 2>/dev/null || true
     done
 
-    # Остановка watchdog
     systemctl stop tunnel-watchdog.timer 2>/dev/null || true
     systemctl disable tunnel-watchdog.timer 2>/dev/null || true
     systemctl stop tunnel-watchdog.service 2>/dev/null || true
     systemctl disable tunnel-watchdog.service 2>/dev/null || true
+else
+    # Обновление: только остановка, без disable
+    for svc in $(systemctl list-units --type=service --no-legend 'autossh-tunnel-*' 2>/dev/null | awk '{print $1}'); do
+        systemctl stop "$svc" 2>/dev/null || true
+    done
+
+    systemctl stop tunnel-watchdog.timer 2>/dev/null || true
+    systemctl stop tunnel-watchdog.service 2>/dev/null || true
 fi
 
 %postun
