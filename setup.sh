@@ -417,7 +417,11 @@ main() {
             start_services
 
             echo ""
-            log_step "Готово! Запусти './setup.sh status' для проверки"
+            if [[ "$PKG_MODE" == true ]]; then
+                log_step "Запусти 'auto-ssh-tunnels status' для проверки"
+            else
+                log_step "Запусти './setup.sh status' для проверки"
+            fi
             ;;
         status)
             show_status
