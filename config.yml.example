@@ -1,5 +1,18 @@
-# type4 — лаконичный SSH-туннель менеджер
-# Скопируй в config.yml и отредактируй
+# auto-ssh-tunnels -- менеджер SSH-туннелей
+# Скопируй в config.yml и отредактируй.
+#
+# Команды:
+#   auto-ssh-tunnels full              Установка / применение конфига
+#   auto-ssh-tunnels dry-run           Предпросмотр генерируемых файлов
+#   auto-ssh-tunnels status            Статус сервисов и проверка портов
+#   auto-ssh-tunnels restart [name]    Перезапуск туннелей (все или один)
+#   auto-ssh-tunnels copy-key <name>   Копировать SSH-ключ на сервер
+#
+# После изменения config.yml повторно запусти:
+#   sudo auto-ssh-tunnels full
+# Скрипт идемпотентен: перезапустит только изменённые сервисы.
+#
+# Из исходников вместо auto-ssh-tunnels используй bash setup.sh.
 
 tunnel_user: autosshtunnels       # Системный пользователь для autossh
 log_dir: /var/log/ssh-tunnel
