@@ -106,3 +106,37 @@ deploy_file() {
     log_info "  обновлено: $target"
     return 0
 }
+
+# --- Парсинг jump-хоста: user@host[:port] -> jump_userhost + jump_port ---
+# Устанавливает переменные: _JUMP_USERHOST, _JUMP_PORT
+parse_jump() {
+    local jump="$1"
+    _JUMP_USERHOST="$jump"
+    _JUMP_PORT=""
+    if [[ "$jump" == *@*:* ]]; then
+        local userhost="${jump%:*}"
+        local port="${jump##*:}"
+        if [[ "$port" =~ ^[0-9]+$ ]]; then
+            _JUMP_USERHOST="$userhost"
+            _JUMP_PORT="$port"
+        fi
+    fi
+}
+
+# Сформировать SSH ProxyCommand-аргументы для jump-хоста
+# $1 -- CONN_JUMP, $2 -- escape mode: "systemd" (%%h/%%p) или "shell" (%h/%p)
+build_proxy_command() {
+    local jump="$1" escape="${2:-systemd}"
+    [ -n "$jump" ] || return
+
+    parse_jump "$jump"
+    local h="%h" p="%p"
+    if [ "$escape" = "systemd" ]; then
+        h="%%h"; p="%%p"
+    fi
+
+    local port_opt=""
+    [ -n "$_JUMP_PORT" ] && port_opt="-p ${_JUMP_PORT} "
+
+    echo "ssh ${port_opt}-W ${h}:${p} ${_JUMP_USERHOST}"
+}

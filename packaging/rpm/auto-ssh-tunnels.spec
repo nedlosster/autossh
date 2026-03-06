@@ -23,6 +23,7 @@ Generates systemd services, health-check watchdog, and logrotate configs.
 %setup -q
 
 %install
+mkdir -p %{buildroot}
 cp -a usr etc %{buildroot}/
 
 %files
@@ -34,14 +35,14 @@ cp -a usr etc %{buildroot}/
 
 %post
 # Пользователь autosshtunnels
-if ! id autosshtunnels &>/dev/null; then
+if \! id autosshtunnels &>/dev/null; then
     useradd -r -m -s /bin/bash autosshtunnels
 fi
 
 # SSH-ключ
 SSH_DIR="/home/autosshtunnels/.ssh"
 KEY_FILE="${SSH_DIR}/id_ed25519"
-if [ ! -f "$KEY_FILE" ]; then
+if [ \! -f "$KEY_FILE" ]; then
     mkdir -p "$SSH_DIR"
     ssh-keygen -t ed25519 -f "$KEY_FILE" -N "" -C "autosshtunnels@$(hostname)"
     chown -R autosshtunnels:autosshtunnels "$SSH_DIR"
@@ -53,52 +54,6 @@ fi
 mkdir -p /var/log/ssh-tunnel
 chown autosshtunnels:autosshtunnels /var/log/ssh-tunnel
 
-
-%preun
-if [ "$1" = "0" ]; then
-    # Полное удаление: остановка и отключение
-    for svc in $(systemctl list-units --type=service --no-legend 'autossh-tunnel-*' 2>/dev/null | awk '{print $1}'); do
-        systemctl stop "$svc" 2>/dev/null || true
-        systemctl disable "$svc" 2>/dev/null || true
-    done
-
-    systemctl stop tunnel-watchdog.timer 2>/dev/null || true
-    systemctl disable tunnel-watchdog.timer 2>/dev/null || true
-    systemctl stop tunnel-watchdog.service 2>/dev/null || true
-    systemctl disable tunnel-watchdog.service 2>/dev/null || true
-else
-    # Обновление: только остановка, без disable
-    for svc in $(systemctl list-units --type=service --no-legend 'autossh-tunnel-*' 2>/dev/null | awk '{print $1}'); do
-        systemctl stop "$svc" 2>/dev/null || true
-    done
-
-    systemctl stop tunnel-watchdog.timer 2>/dev/null || true
-    systemctl stop tunnel-watchdog.service 2>/dev/null || true
-fi
-
-%postun
-if [ "$1" = "0" ]; then
-    # Удаление сгенерированных systemd-юнитов
-    rm -f /etc/systemd/system/autossh-tunnel-*.service
-    rm -f /etc/systemd/system/tunnel-watchdog.service
-    rm -f /etc/systemd/system/tunnel-watchdog.timer
-    systemctl daemon-reload 2>/dev/null || true
-
-    # Удаление health-check и logrotate
-    rm -f /usr/local/bin/tunnel-health.sh
-    rm -f /etc/logrotate.d/ssh-tunnel
-
-    # Удаление логов
-    rm -rf /var/log/ssh-tunnel
-
-    # Удаление пользователя autosshtunnels
-    if id autosshtunnels &>/dev/null; then
-        userdel -r autosshtunnels 2>/dev/null || true
-    fi
-fi
-
-%posttrans
-# Выполняется после всех скриптлетов (и нового, и старого пакета)
 # Восстановить сервисы, если unit-файлы существуют
 systemctl daemon-reload 2>/dev/null || true
 for f in /etc/systemd/system/autossh-tunnel-*.service; do
@@ -110,4 +65,37 @@ done
 if [ -f /etc/systemd/system/tunnel-watchdog.timer ]; then
     systemctl enable tunnel-watchdog.timer 2>/dev/null || true
     systemctl start tunnel-watchdog.timer 2>/dev/null || true
+fi
+
+%preun
+if [ "$1" = "0" ]; then
+    for svc in $(systemctl list-units --type=service --no-legend autossh-tunnel-* 2>/dev/null | awk {print }); do
+        systemctl stop "$svc" 2>/dev/null || true
+        systemctl disable "$svc" 2>/dev/null || true
+    done
+    systemctl stop tunnel-watchdog.timer 2>/dev/null || true
+    systemctl disable tunnel-watchdog.timer 2>/dev/null || true
+    systemctl stop tunnel-watchdog.service 2>/dev/null || true
+    systemctl disable tunnel-watchdog.service 2>/dev/null || true
+else
+    for svc in $(systemctl list-units --type=service --no-legend autossh-tunnel-* 2>/dev/null | awk {print }); do
+        systemctl stop "$svc" 2>/dev/null || true
+    done
+    systemctl stop tunnel-watchdog.timer 2>/dev/null || true
+    systemctl stop tunnel-watchdog.service 2>/dev/null || true
+fi
+
+%postun
+if [ "$1" = "0" ]; then
+    rm -f /etc/systemd/system/autossh-tunnel-*.service
+    rm -f /etc/systemd/system/tunnel-watchdog.service
+    rm -f /etc/systemd/system/tunnel-watchdog.timer
+    systemctl daemon-reload 2>/dev/null || true
+    rm -f /usr/local/bin/tunnel-health.sh
+    rm -f /usr/local/bin/tunnel-cleanup.sh
+    rm -f /etc/logrotate.d/ssh-tunnel
+    rm -rf /var/log/ssh-tunnel
+    if id autosshtunnels &>/dev/null; then
+        userdel -r autosshtunnels 2>/dev/null || true
+    fi
 fi

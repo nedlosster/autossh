@@ -9,7 +9,7 @@ gen_autossh_service() {
     # ProxyCommand для jump-хоста (%%h/%%p — экранирование для systemd)
     local proxy_line=""
     if [ -n "$CONN_JUMP" ]; then
-        proxy_line="    -o \"ProxyCommand=ssh -W %%h:%%p ${CONN_JUMP}\" \\"$'\n'
+        proxy_line="    -o \"ProxyCommand=$(build_proxy_command "$CONN_JUMP" systemd)\" \\"$'\n'
     fi
 
     # ExecStartPre: cleanup зависших сессий на remote (только если есть -R порты)
@@ -72,6 +72,19 @@ LOG_FILE="${LOG_DIR}/tunnel-health.log"
 
 log() { echo "\$(date '+%Y-%m-%d %H:%M:%S') \$*" >> "\$LOG_FILE"; }
 
+# Парсинг jump user@host[:port] -> ProxyCommand с -p
+_build_proxy_cmd() {
+    local j="\$1" key="\$2"
+    local jhost="\$j" jport=""
+    if [[ "\$j" == *@*:* ]]; then
+        jhost="\${j%:*}"; jport="\${j##*:}"
+        [[ "\$jport" =~ ^[0-9]+\$ ]] || jport=""
+    fi
+    local popts=""
+    [ -n "\$jport" ] && popts="-p \${jport} "
+    echo "ssh \${popts}-i \${key} -o StrictHostKeyChecking=no -W %h:%p \${jhost}"
+}
+
 # Проверка -R портов на remote через SSH + nc
 check_remote_ports() {
     local name="\$1" host="\$2" port="\$3" user="\$4" jump="\$5"
@@ -87,7 +100,7 @@ check_remote_ports() {
     ssh_opts+=(-i /home/${TUNNEL_USER}/.ssh/id_ed25519)
 
     if [ -n "\$jump" ]; then
-        ssh_opts+=(-o "ProxyCommand=ssh -i /home/${TUNNEL_USER}/.ssh/id_ed25519 -o StrictHostKeyChecking=no -W %h:%p \${jump}")
+        ssh_opts+=(-o "ProxyCommand=\$(_build_proxy_cmd "\$jump" /home/${TUNNEL_USER}/.ssh/id_ed25519)")
     fi
 
     ssh_opts+=(-p "\$port" -fN "\${user}@\${host}")
@@ -201,6 +214,19 @@ gen_tunnel_cleanup_sh() {
 LOG_FILE="${LOG_DIR}/tunnel-cleanup.log"
 log() { echo "\$(date '+%Y-%m-%d %H:%M:%S') \$*" >> "\$LOG_FILE"; }
 
+# Парсинг jump user@host[:port] -> ProxyCommand с -p
+_build_proxy_cmd() {
+    local j="\$1" key="\$2"
+    local jhost="\$j" jport=""
+    if [[ "\$j" == *@*:* ]]; then
+        jhost="\${j%:*}"; jport="\${j##*:}"
+        [[ "\$jport" =~ ^[0-9]+\$ ]] || jport=""
+    fi
+    local popts=""
+    [ -n "\$jport" ] && popts="-p \${jport} "
+    echo "ssh \${popts}-i \${key} -o StrictHostKeyChecking=no -W %h:%p \${jhost}"
+}
+
 conn_user="\$1"; host="\$2"; port="\$3"; tunnel_user="\$4"; shift 4
 
 # Jump-хост (опционально)
@@ -217,7 +243,7 @@ r_ports=("\$@")
 ssh_opts=(-o ConnectTimeout=10 -o StrictHostKeyChecking=no -o BatchMode=yes)
 ssh_opts+=(-i "/home/\${tunnel_user}/.ssh/id_ed25519")
 if [ -n "\$jump" ]; then
-    ssh_opts+=(-o "ProxyCommand=ssh -i /home/\${tunnel_user}/.ssh/id_ed25519 -o StrictHostKeyChecking=no -W %h:%p \${jump}")
+    ssh_opts+=(-o "ProxyCommand=\$(_build_proxy_cmd "\$jump" /home/\${tunnel_user}/.ssh/id_ed25519)")
 fi
 ssh_opts+=(-p "\$port" "\${conn_user}@\${host}")
 
